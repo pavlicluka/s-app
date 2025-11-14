@@ -1,0 +1,921 @@
+import React, { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import type { CyberIncidentReport } from '../lib/supabase'
+import { AlertTriangle, Clock, CheckCircle, X, Eye, Download } from 'lucide-react'
+
+// Incident taxonomy from NOKI standard
+const INCIDENT_TYPES = [
+  { category: 'Zlonamerna vsebina', value: 'zlonamerna_vsebina' },
+  { category: 'Zlonamerna koda', value: 'zlonamerna_koda' },
+  { category: 'Zbiranje informacij', value: 'zbiranje_informacij' },
+  { category: 'Poizkusi vdora', value: 'poizkusi_vdora' },
+  { category: 'Vdori', value: 'vdori' },
+  { category: 'Razpoložljivost', value: 'razpolozljivost' },
+  { category: 'Varnost informacijskih virov', value: 'varnost_informacijskih_virov' },
+  { category: 'Goljufije', value: 'goljufije' },
+  { category: 'Ranljivost', value: 'ranljivost' },
+  { category: 'Drugo', value: 'drugo' },
+  { category: 'Test', value: 'test' }
+]
+
+const INCIDENT_CAUSES = [
+  { label: 'Tehnična napaka', value: 'tehnična napaka' },
+  { label: 'Človeška napaka', value: 'človeška napaka' },
+  { label: 'Zlonamerno dejanje', value: 'zlonamerno dejanje' },
+  { label: 'Naravna nesreča', value: 'naravna nesreča' },
+  { label: 'Drugo', value: 'drugo' }
+]
+
+const REPORT_TYPES = [
+  { label: 'Prvo poročilo zavezanca', value: 'prvo_porocilo' },
+  { label: 'Vmesno/končno poročilo', value: 'vmesno_porocilo' },
+  { label: 'Prvo obveščanje PNO', value: 'obvescanje_pno' }
+]
+
+export default function CyberIncidentReportPage() {
+  const [activeTab, setActiveTab] = useState<'form' | 'list'>('form')
+  const [reports, setReports] = useState<CyberIncidentReport[]>([])
+  const [filteredReports, setFilteredReports] = useState<CyberIncidentReport[]>([])
+  const [filterType, setFilterType] = useState<string>('all')
+  const [loading, setLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [selectedReport, setSelectedReport] = useState<CyberIncidentReport | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [isExportingPDF, setIsExportingPDF] = useState(false)
+
+  // Form state
+  const [formData, setFormData] = useState<{
+    incident_number: string
+    detection_datetime: string
+    incident_type: string
+    incident_description: string
+    impact_assessment: string
+    incident_status: 'v teku' | 'rešen' | 'zaprt'
+    entity_identifier: string
+    contact_name: string
+    contact_phone: string
+    contact_email: string
+    report_datetime: string
+    incident_cause: string
+    incident_impact: string
+    response_measures: string
+    lessons_learned: string
+    report_type: 'prvo_porocilo' | 'vmesno_porocilo' | 'obvescanje_pno'
+  }>({
+    incident_number: '',
+    detection_datetime: '',
+    incident_type: '',
+    incident_description: '',
+    impact_assessment: '',
+    incident_status: 'v teku',
+    entity_identifier: '',
+    contact_name: '',
+    contact_phone: '',
+    contact_email: '',
+    report_datetime: new Date().toISOString().slice(0, 16),
+    incident_cause: '',
+    incident_impact: '',
+    response_measures: '',
+    lessons_learned: '',
+    report_type: 'prvo_porocilo'
+  })
+
+  // Load reports
+  useEffect(() => {
+    fetchReports()
+  }, [])
+
+  // Filter reports when filter changes
+  useEffect(() => {
+    if (filterType === 'all') {
+      setFilteredReports(reports)
+    } else {
+      setFilteredReports(reports.filter(report => report.report_type === filterType))
+    }
+  }, [reports, filterType])
+
+  const fetchReports = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('cyber_incident_reports')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setReports(data || [])
+    } catch (error) {
+      console.error('Napaka pri nalaganju poročil:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const validateForm = () => {
+    const requiredFields = [
+      'detection_datetime',
+      'incident_type',
+      'incident_description',
+      'impact_assessment',
+      'entity_identifier',
+      'contact_name',
+      'contact_email',
+      'report_type'
+    ]
+
+    // Additional fields required for vmesno/končno poročilo
+    if (formData.report_type === 'vmesno_porocilo') {
+      requiredFields.push('incident_cause', 'incident_impact', 'response_measures')
+    }
+
+    const missingFields = requiredFields.filter(field => !formData[field as keyof typeof formData])
+    
+    if (missingFields.length > 0) {
+      setSubmitMessage({
+        type: 'error',
+        text: `Manjkajo obvezna polja: ${missingFields.join(', ')}`
+      })
+      return false
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.contact_email)) {
+      setSubmitMessage({
+        type: 'error',
+        text: 'Neveljaven format e-poštnega naslova'
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) return
+
+    setIsSubmitting(true)
+    setSubmitMessage(null)
+
+    try {
+      const { error } = await supabase
+        .from('cyber_incident_reports')
+        .insert([formData])
+
+      if (error) throw error
+
+      setSubmitMessage({
+        type: 'success',
+        text: 'Poročilo je bilo uspešno poslano'
+      })
+
+      // Reset form
+      setFormData({
+        incident_number: '',
+        detection_datetime: '',
+        incident_type: '',
+        incident_description: '',
+        impact_assessment: '',
+        incident_status: 'v teku',
+        entity_identifier: '',
+        contact_name: '',
+        contact_phone: '',
+        contact_email: '',
+        report_datetime: new Date().toISOString().slice(0, 16),
+        incident_cause: '',
+        incident_impact: '',
+        response_measures: '',
+        lessons_learned: '',
+        report_type: 'prvo_porocilo'
+      })
+
+      // Refresh reports list
+      fetchReports()
+
+    } catch (error) {
+      console.error('Napaka pri pošiljanju poročila:', error)
+      setSubmitMessage({
+        type: 'error',
+        text: 'Napaka pri pošiljanju poročila. Poskusite ponovno.'
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'v teku':
+        return <Clock className="w-4 h-4 text-yellow-400" />
+      case 'rešen':
+        return <CheckCircle className="w-4 h-4 text-green-400" />
+      case 'zaprt':
+        return <X className="w-4 h-4 text-gray-400" />
+      default:
+        return <AlertTriangle className="w-4 h-4 text-orange-400" />
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+    switch (status) {
+      case 'v teku':
+        return `${baseClasses} bg-yellow-500/20 text-yellow-400 border border-yellow-500/30`
+      case 'rešen':
+        return `${baseClasses} bg-green-500/20 text-green-400 border border-green-500/30`
+      case 'zaprt':
+        return `${baseClasses} bg-gray-500/20 text-gray-400 border border-gray-500/30`
+      default:
+        return `${baseClasses} bg-orange-500/20 text-orange-400 border border-orange-500/30`
+    }
+  }
+
+  const getReportTypeBadge = (type: string) => {
+    const baseClasses = "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+    switch (type) {
+      case 'prvo_porocilo':
+        return `${baseClasses} bg-blue-500/20 text-blue-400 border border-blue-500/30`
+      case 'vmesno_porocilo':
+        return `${baseClasses} bg-purple-500/20 text-purple-400 border border-purple-500/30`
+      case 'obvescanje_pno':
+        return `${baseClasses} bg-red-500/20 text-red-400 border border-red-500/30`
+      default:
+        return `${baseClasses} bg-gray-500/20 text-gray-400 border border-gray-500/30`
+    }
+  }
+
+  const getReportTypeLabel = (type: string) => {
+    const reportType = REPORT_TYPES.find(rt => rt.value === type)
+    return reportType ? reportType.label : type
+  }
+
+  const handleViewDetails = (report: CyberIncidentReport) => {
+    setSelectedReport(report)
+    setShowDetailModal(true)
+  }
+
+  const handleCloseDetailModal = () => {
+    setShowDetailModal(false)
+    setSelectedReport(null)
+  }
+
+  const handleExportPDF = async (report: CyberIncidentReport) => {
+    setIsExportingPDF(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-incident-report-pdf', {
+        body: { reportId: report.id }
+      })
+
+      if (error) throw error
+
+      // Create blob from HTML and trigger download with print-to-PDF
+      const blob = new Blob([data], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      
+      // Open in new window for printing to PDF
+      const printWindow = window.open(url, '_blank')
+      if (printWindow) {
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print()
+          }, 250)
+        }
+      }
+
+      // Alternative: Direct HTML download
+      const incidentNumber = report.incident_number || `INC-${report.id.slice(0, 8)}`
+      const date = new Date().toISOString().split('T')[0]
+      const fileName = `Porocilo_${incidentNumber}_${date}.html`
+      
+      const downloadLink = document.createElement('a')
+      downloadLink.href = url
+      downloadLink.download = fileName
+      downloadLink.click()
+      
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('PDF export error:', error)
+      alert('Napaka pri izvozu PDF. Poskusite ponovno.')
+    } finally {
+      setIsExportingPDF(false)
+    }
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Poročanje o kibernetskih incidentih</h1>
+          <p className="text-gray-400 mt-1">NOKI - Nacionalni načrt odzivanja na kibernetske incidente</p>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex space-x-1 bg-gray-800/50 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('form')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'form'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          Novo poročilo
+        </button>
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'list'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+              : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+          }`}
+        >
+          Seznam poročil
+        </button>
+      </div>
+
+      {/* Form Tab */}
+      {activeTab === 'form' && (
+        <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Report Type Selection */}
+            <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+              <label className="block text-sm font-medium text-gray-300 mb-3">
+                Vrsta poročila *
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {REPORT_TYPES.map((type) => (
+                  <button
+                    key={type.value}
+                    type="button"
+                    onClick={() => handleInputChange('report_type', type.value)}
+                    className={`p-3 text-left rounded-lg border transition-all ${
+                      formData.report_type === type.value
+                        ? 'border-blue-500 bg-blue-500/20 text-blue-400'
+                        : 'border-gray-600/50 bg-gray-700/30 text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{type.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Basic Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Številka incidenta
+                </label>
+                <input
+                  type="text"
+                  value={formData.incident_number}
+                  onChange={(e) => handleInputChange('incident_number', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  placeholder="AUTO-GENERATED"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Datum in čas odkritja *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formData.detection_datetime}
+                  onChange={(e) => handleInputChange('detection_datetime', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Vrsta incidenta *
+                </label>
+                <select
+                  value={formData.incident_type}
+                  onChange={(e) => handleInputChange('incident_type', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  required
+                >
+                  <option value="">Izberite vrsto incidenta</option>
+                  {INCIDENT_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Status incidenta
+                </label>
+                <select
+                  value={formData.incident_status}
+                  onChange={(e) => handleInputChange('incident_status', e.target.value as any)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                >
+                  <option value="v teku">V teku</option>
+                  <option value="rešen">Rešen</option>
+                  <option value="zaprt">Zaprt</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Opis incidenta *
+              </label>
+              <textarea
+                value={formData.incident_description}
+                onChange={(e) => handleInputChange('incident_description', e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                placeholder="Opišite incident..."
+                required
+              />
+            </div>
+
+            {/* Impact Assessment */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Ocena vpliva *
+              </label>
+              <textarea
+                value={formData.impact_assessment}
+                onChange={(e) => handleInputChange('impact_assessment', e.target.value)}
+                rows={3}
+                className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                placeholder="Ocenite vpliv incidenta na organizacijo..."
+                required
+              />
+            </div>
+
+            {/* Entity and Contact Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Identifikacija entitete *
+                </label>
+                <input
+                  type="text"
+                  value={formData.entity_identifier}
+                  onChange={(e) => handleInputChange('entity_identifier', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  placeholder="ID entitete"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Kontaktna oseba *
+                </label>
+                <input
+                  type="text"
+                  value={formData.contact_name}
+                  onChange={(e) => handleInputChange('contact_name', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  placeholder="Ime in priimek"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Telefon
+                </label>
+                <input
+                  type="tel"
+                  value={formData.contact_phone}
+                  onChange={(e) => handleInputChange('contact_phone', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  placeholder="+386 XX XXX XXX"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  E-poštni naslov *
+                </label>
+                <input
+                  type="email"
+                  value={formData.contact_email}
+                  onChange={(e) => handleInputChange('contact_email', e.target.value)}
+                  className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                  placeholder="ime@podjetje.si"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Report Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Datum poročanja
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.report_datetime}
+                onChange={(e) => handleInputChange('report_datetime', e.target.value)}
+                className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+              />
+            </div>
+
+            {/* Additional fields for vmesno/končno poročilo */}
+            {formData.report_type === 'vmesno_porocilo' && (
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 space-y-4">
+                <h3 className="text-lg font-medium text-purple-400 mb-4">
+                  Dodatne informacije za vmesno/končno poročilo
+                </h3>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Vzrok incidenta *
+                  </label>
+                  <select
+                    value={formData.incident_cause}
+                    onChange={(e) => handleInputChange('incident_cause', e.target.value)}
+                    className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                    required
+                  >
+                    <option value="">Izberite vzrok incidenta</option>
+                    {INCIDENT_CAUSES.map((cause) => (
+                      <option key={cause.value} value={cause.value}>
+                        {cause.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Vpliv incidenta *
+                  </label>
+                  <textarea
+                    value={formData.incident_impact}
+                    onChange={(e) => handleInputChange('incident_impact', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                    placeholder="Opišite dejanski vpliv incidenta..."
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Odzivni ukrepi *
+                  </label>
+                  <textarea
+                    value={formData.response_measures}
+                    onChange={(e) => handleInputChange('response_measures', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                    placeholder="Opišite izvedene odzivne ukrepe..."
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Pridobljene izkušnje
+                  </label>
+                  <textarea
+                    value={formData.lessons_learned}
+                    onChange={(e) => handleInputChange('lessons_learned', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                    placeholder="Opišite pridobljene izkušnje in priporočila..."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Submit Message */}
+            {submitMessage && (
+              <div className={`p-4 rounded-lg border ${
+                submitMessage.type === 'success'
+                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                  : 'bg-red-500/20 text-red-400 border-red-500/30'
+              }`}>
+                {submitMessage.text}
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/25"
+              >
+                {isSubmitting ? 'Pošiljam...' : 'Pošlji poročilo'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Reports List Tab */}
+      {activeTab === 'list' && (
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Filtriraj po vrsti poročila
+              </label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-4 py-2 bg-gray-700/50 border border-gray-600/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+              >
+                <option value="all">Vsi tipi</option>
+                {REPORT_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={fetchReports}
+                disabled={loading}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white font-medium rounded-lg transition-all duration-200"
+              >
+                {loading ? 'Nalagam...' : 'Osveži'}
+              </button>
+            </div>
+          </div>
+
+          {/* Reports Table */}
+          <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-700/30 border-b border-gray-700/50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Incident
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Vrsta poročila
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Kontakt
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Datum odkritja
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      Akcije
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                  {filteredReports.map((report) => (
+                    <tr key={report.id} className="hover:bg-gray-700/20 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-white font-medium">
+                          {report.incident_number || `INC-${report.id.slice(0, 8)}`}
+                        </div>
+                        <div className="text-sm text-gray-400 max-w-xs truncate">
+                          {report.incident_description}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={getReportTypeBadge(report.report_type)}>
+                          {getReportTypeLabel(report.report_type)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={getStatusBadge(report.incident_status)}>
+                          {getStatusIcon(report.incident_status)}
+                          {report.incident_status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-white">{report.contact_name}</div>
+                        <div className="text-sm text-gray-400">{report.contact_email}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-white">
+                          {new Date(report.detection_datetime).toLocaleDateString('sl-SI')}
+                        </div>
+                        <div className="text-sm text-gray-400">
+                          {new Date(report.detection_datetime).toLocaleTimeString('sl-SI')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => handleViewDetails(report)}
+                          className="inline-flex items-center justify-center p-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 transition-all duration-200 group"
+                          title="Podrobnosti poročila"
+                        >
+                          <Eye className="w-5 h-5 text-blue-400 group-hover:text-blue-300" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filteredReports.length === 0 && !loading && (
+                <div className="text-center py-12">
+                  <AlertTriangle className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-300">Ni poročil</h3>
+                  <p className="mt-1 text-sm text-gray-400">
+                    {filterType === 'all' 
+                      ? 'Še ni bilo ustvarjenih poročil.'
+                      : 'Ni poročil za izbrani tip.'
+                    }
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {showDetailModal && selectedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-gray-700/50 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gray-800 border-b border-gray-700/50 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white">Podrobnosti poročila</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  {selectedReport.incident_number || `INC-${selectedReport.id.slice(0, 8)}`}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseDetailModal}
+                className="p-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-6 space-y-6">
+              {/* Report Type and Status */}
+              <div className="flex flex-wrap gap-3">
+                <span className={getReportTypeBadge(selectedReport.report_type)}>
+                  {getReportTypeLabel(selectedReport.report_type)}
+                </span>
+                <span className={getStatusBadge(selectedReport.incident_status)}>
+                  {getStatusIcon(selectedReport.incident_status)}
+                  {selectedReport.incident_status}
+                </span>
+              </div>
+
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                  <div className="text-xs text-gray-400 mb-1">Datum in čas odkritja</div>
+                  <div className="text-sm text-white font-medium">
+                    {new Date(selectedReport.detection_datetime).toLocaleString('sl-SI')}
+                  </div>
+                </div>
+                <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                  <div className="text-xs text-gray-400 mb-1">Datum poročanja</div>
+                  <div className="text-sm text-white font-medium">
+                    {new Date(selectedReport.report_datetime).toLocaleString('sl-SI')}
+                  </div>
+                </div>
+                <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                  <div className="text-xs text-gray-400 mb-1">Vrsta incidenta</div>
+                  <div className="text-sm text-white font-medium">
+                    {INCIDENT_TYPES.find(t => t.value === selectedReport.incident_type)?.category || selectedReport.incident_type}
+                  </div>
+                </div>
+                <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                  <div className="text-xs text-gray-400 mb-1">Identifikator entitete</div>
+                  <div className="text-sm text-white font-medium">{selectedReport.entity_identifier}</div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                <div className="text-xs text-gray-400 mb-2">Opis incidenta</div>
+                <div className="text-sm text-white whitespace-pre-wrap">{selectedReport.incident_description}</div>
+              </div>
+
+              {/* Impact Assessment */}
+              <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                <div className="text-xs text-gray-400 mb-2">Ocena vpliva</div>
+                <div className="text-sm text-white whitespace-pre-wrap">{selectedReport.impact_assessment}</div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                <div className="text-xs text-gray-400 mb-3">Kontaktne informacije</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Ime</div>
+                    <div className="text-sm text-white">{selectedReport.contact_name}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">E-pošta</div>
+                    <div className="text-sm text-white">{selectedReport.contact_email}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Telefon</div>
+                    <div className="text-sm text-white">{selectedReport.contact_phone || '-'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Information for vmesno/končno poročilo */}
+              {selectedReport.report_type === 'vmesno_porocilo' && (
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 space-y-4">
+                  <h3 className="text-sm font-medium text-purple-400">
+                    Dodatne informacije (vmesno/končno poročilo)
+                  </h3>
+
+                  {selectedReport.incident_cause && (
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Vzrok incidenta</div>
+                      <div className="text-sm text-white">{selectedReport.incident_cause}</div>
+                    </div>
+                  )}
+
+                  {selectedReport.incident_impact && (
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Vpliv incidenta</div>
+                      <div className="text-sm text-white whitespace-pre-wrap">{selectedReport.incident_impact}</div>
+                    </div>
+                  )}
+
+                  {selectedReport.response_measures && (
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Odzivni ukrepi</div>
+                      <div className="text-sm text-white whitespace-pre-wrap">{selectedReport.response_measures}</div>
+                    </div>
+                  )}
+
+                  {selectedReport.lessons_learned && (
+                    <div>
+                      <div className="text-xs text-gray-400 mb-1">Pridobljene izkušnje</div>
+                      <div className="text-sm text-white whitespace-pre-wrap">{selectedReport.lessons_learned}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Metadata */}
+              <div className="bg-gray-700/30 p-4 rounded-lg border border-gray-600/30">
+                <div className="text-xs text-gray-400 mb-3">Metapodatki</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">ID poročila</div>
+                    <div className="text-sm text-white font-mono">{selectedReport.id}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Ustvarjeno</div>
+                    <div className="text-sm text-white">
+                      {new Date(selectedReport.created_at).toLocaleString('sl-SI')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-gray-800 border-t border-gray-700/50 px-6 py-4 flex justify-between items-center">
+              <button
+                onClick={() => handleExportPDF(selectedReport)}
+                disabled={isExportingPDF}
+                className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/25"
+              >
+                <Download className="w-4 h-4" />
+                {isExportingPDF ? 'Pripravljam...' : 'Izvozi PDF'}
+              </button>
+              <button
+                onClick={handleCloseDetailModal}
+                className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-all duration-200"
+              >
+                Zapri
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

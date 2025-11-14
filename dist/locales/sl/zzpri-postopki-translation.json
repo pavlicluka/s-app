@@ -1,0 +1,181 @@
+{
+  "zzpriPostopki": {
+    "title": "Postopki po ZZPri",
+    "subtitle": "Upravljanje postopkov in evidenc po Zakonu o zaščiti prijaviteljev nepravilnosti",
+    "addPostopek": "Dodaj postopek",
+    "searchPlaceholder": "Iskanje po številki zadeve, prijavitelju, vrsti prijave...",
+    "noData": "Ni podatkov",
+    "table": {
+      "procedureNumber": "Št. postopka",
+      "reportDate": "Datum prijave",
+      "reportType": "Vrsta prijave",
+      "reporter": "Prijavitelj",
+      "reportSubject": "Predmet prijave",
+      "status": "Status",
+      "responsiblePerson": "Odgovorna oseba",
+      "deadline": "Rok",
+      "actions": "Dejanja"
+    },
+    "reportTypes": {
+      "internal": "Notranja prijava",
+      "external": "Zunanja prijava",
+      "publicDisclosure": "Javna razkritja",
+      "anonymous": "Anonimna prijava"
+    },
+    "statuses": {
+      "received": "Prejeto",
+      "inReview": "V obravnavi",
+      "investigating": "Preiskava",
+      "resolved": "Rešeno",
+      "closed": "Zaključeno",
+      "rejected": "Zavrnjeno"
+    },
+    "modal": {
+      "title": "Dodaj postopek po ZZPri",
+      "sections": {
+        "basic": "1. Osnovni podatki",
+        "reporter": "2. Podatki o prijavitelju",
+        "report": "3. Podatki o prijavi",
+        "procedure": "4. Postopek obravnave",
+        "protection": "5. Zaščitni ukrepi",
+        "documentation": "6. Dokumentacija"
+      },
+      "fields": {
+        "procedureNumber": "Številka postopka",
+        "reportDate": "Datum prejema prijave",
+        "reportType": "Vrsta prijave",
+        "reporterType": "Tip prijavitelja",
+        "reporterName": "Ime in priimek prijavitelja",
+        "reporterEmail": "E-pošta prijavitelja",
+        "reporterPhone": "Telefon prijavitelja",
+        "reporterOrganization": "Organizacija prijavitelja",
+        "isAnonymous": "Anonimna prijava",
+        "reportSubject": "Predmet prijave",
+        "reportDescription": "Opis nepravilnosti",
+        "reportedPerson": "Oseba, na katero se prijava nanaša",
+        "reportedPersonPosition": "Položaj osebe",
+        "reportedDepartment": "Oddelek/enota",
+        "evidenceDescription": "Opis dokazov",
+        "evidenceAttachments": "Priložena dokazila",
+        "legalBasis": "Pravna podlaga",
+        "receivedBy": "Prejel",
+        "assignedTo": "Dodeljen",
+        "responsiblePerson": "Odgovorna oseba za obravnavo",
+        "deadline": "Rok za potrditev prejema (7 dni)",
+        "investigationDeadline": "Rok za obravnavo (3 meseci)",
+        "status": "Status postopka",
+        "initialAssessment": "Začetna ocena",
+        "investigationPlan": "Načrt preiskave",
+        "findingsDescription": "Ugotovitve",
+        "measuresProposed": "Predlagani ukrepi",
+        "measuresImplemented": "Izvedeni ukrepi",
+        "protectionMeasures": "Zaščitni ukrepi za prijavitelja",
+        "confidentialityLevel": "Stopnja zaupnosti",
+        "accessRestrictions": "Omejitve dostopa",
+        "retaliationRisk": "Ocena tveganja povračilnih ukrepov",
+        "communicationLog": "Dnevnik komunikacije",
+        "reportAcknowledgment": "Potrditev prejema prijave",
+        "acknowledgmentDate": "Datum potrditve",
+        "acknowledgmentSentTo": "Potrdilo poslano",
+        "finalReport": "Končno poročilo",
+        "closureDate": "Datum zaključka",
+        "closureReason": "Razlog zaključka",
+        "notes": "Opombe"
+      },
+      "placeholders": {
+        "procedureNumber": "npr. ZZP-2025-001",
+        "reportSubject": "Kratek opis predmeta prijave",
+        "reportDescription": "Podroben opis nepravilnosti, kršitev ali nezakonitosti",
+        "reporterName": "Polno ime prijavitelja (če ni anonimno)",
+        "reporterEmail": "Email naslov prijavitelja",
+        "reporterPhone": "Telefonska številka",
+        "reporterOrganization": "Ime organizacije/delodajalca",
+        "reportedPerson": "Ime osebe, na katero se prijava nanaša",
+        "reportedPersonPosition": "Položaj ali funkcija osebe",
+        "reportedDepartment": "Oddelek ali organizacijska enota",
+        "evidenceDescription": "Opis dokumentov, posnetkov ali drugih dokazov",
+        "initialAssessment": "Začetna ocena utemeljenosti prijave",
+        "investigationPlan": "Načrt aktivnosti za obravnavo prijave",
+        "findingsDescription": "Ugotovitve preiskave in obravnave",
+        "measuresProposed": "Ukrepi za odpravo nepravilnosti",
+        "protectionMeasures": "Ukrepi za zaščito prijavitelja pred povračilnimi ukrepi",
+        "communicationLog": "Beleženje vseh interakcij s prijaviteljem",
+        "finalReport": "Povzetek ugotovitev in izvedenih ukrepov",
+        "closureReason": "Razlog za zaključek postopka",
+        "notes": "Dodatne opombe in informacije"
+      },
+      "reporterTypes": {
+        "employee": "Zaposleni",
+        "formerEmployee": "Bivši zaposleni",
+        "contractor": "Pogodbeni izvajalec",
+        "volunteer": "Prostovoljec",
+        "candidate": "Kandidat za zaposlitev",
+        "other": "Drugo"
+      },
+      "confidentialityLevels": {
+        "strictlyConfidential": "Strogo zaupno",
+        "confidential": "Zaupno",
+        "internal": "Interno",
+        "limited": "Omejeno"
+      },
+      "legalBasisOptions": {
+        "article6": "Člen 6 - Notranja prijava",
+        "article7": "Člen 7 - Zunanja prijava",
+        "article10": "Člen 10 - Javna razkritja",
+        "article15": "Člen 15 - Zaščitni ukrepi",
+        "article19": "Člen 19 - Povračilni ukrepi"
+      },
+      "closureReasons": {
+        "resolved": "Nepravilnost odpravljena",
+        "unfounded": "Prijava neutemeljena",
+        "withdrawn": "Prijava umaknjena",
+        "transferred": "Preneseno na drug organ",
+        "noJurisdiction": "Ni pristojnosti"
+      },
+      "buttons": {
+        "save": "Shrani postopek",
+        "cancel": "Prekliči",
+        "close": "Zapri"
+      },
+      "validation": {
+        "required": "To polje je obvezno",
+        "invalidEmail": "Neveljaven email naslov",
+        "invalidDate": "Neveljaven datum",
+        "deadlineExceeded": "Rok je potekel"
+      }
+    },
+    "filters": {
+      "allStatuses": "Vsi statusi",
+      "allTypes": "Vse vrste prijav",
+      "dateRange": "Obdobje"
+    },
+    "stats": {
+      "totalProcedures": "Skupaj postopkov",
+      "activeProcedures": "Aktivnih postopkov",
+      "resolvedProcedures": "Rešenih postopkov",
+      "overdueDeadlines": "Prekoračeni roki"
+    },
+    "export": {
+      "csv": "Izvozi CSV",
+      "pdf": "Izvozi PDF",
+      "filename": "ZZPri_Postopki"
+    },
+    "messages": {
+      "created": "Postopek uspešno dodan",
+      "updated": "Postopek uspešno posodobljen",
+      "deleted": "Postopek uspešno izbrisan",
+      "error": "Napaka pri shranjevanju postopka",
+      "deadlineWarning": "Pozor: Rok za potrditev prejema je {days} dni",
+      "investigationWarning": "Pozor: Rok za obravnavo se izteka čez {days} dni"
+    },
+    "help": {
+      "reportDate": "Datum in čas prejema prijave nepravilnosti",
+      "deadline7days": "Zakon zahteva potrditev prejema v roku 7 dni od prejema prijave",
+      "deadline3months": "Zakon zahteva obravnavo v roku 3 mesecev od prejema prijave",
+      "confidentiality": "Identiteta prijavitelja mora biti zaščitena in zaupna",
+      "protection": "Prijavitelj mora biti zaščiten pred povračilnimi ukrepi",
+      "documentation": "Vsa dokumentacija mora biti varno shranjena in dostopna le pooblaščenim osebam",
+      "legalBasis": "Navedite ustrezen člen zakona ZZPri, ki se nanaša na vrsto prijave"
+    }
+  }
+}

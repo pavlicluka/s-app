@@ -1,0 +1,397 @@
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { UserCog, Plus, Edit, Trash2, Eye, AlertCircle } from 'lucide-react'
+import { ISORolesAndResponsibilitiesAddModal } from '../modals'
+import { ModifyModal } from '../modals'
+import { useOrganizationId } from '../../hooks/useOrganizationId'
+
+export default function ISORolesAndResponsibilities() {
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const { organizationId } = useOrganizationId()
+  const [records, setRecords] = useState<any[]>([])
+  const [filteredRecords, setFilteredRecords] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+
+  // Get user profile with organization context
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*, organization_id')
+          .eq('id', user.id)
+          .single()
+
+        if (error) throw error
+        setUserProfile(data)
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
+      }
+    }
+
+    fetchUserProfile()
+  }, [user])
+
+  const fetchRecords = async () => {
+    if (!organizationId) {
+      setLoading(false)
+      return
+    }
+    
+    try {
+      setLoading(true)
+      const { data, error} = await supabase
+        .from('iso_roles_responsibilities')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setRecords(data || [])
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter records based on search term and status
+  useEffect(() => {
+    let filtered = records
+
+    if (searchTerm) {
+      filtered = filtered.filter(record =>
+        record.role_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.person_assigned?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.role_purpose?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(record => record.status === statusFilter)
+    }
+
+    setFilteredRecords(filtered)
+  }, [records, searchTerm, statusFilter])
+
+  const handleModalSuccess = () => {
+    fetchRecords()
+    setIsModalOpen(false)
+    setIsEditModalOpen(false)
+    setIsDeleteModalOpen(false)
+    setIsViewModalOpen(false)
+    setSelectedRecord(null)
+  }
+
+  const openEditModal = (record: any) => {
+    setSelectedRecord(record)
+    setIsEditModalOpen(true)
+  }
+
+  const openDeleteModal = (record: any) => {
+    setSelectedRecord(record)
+    setIsDeleteModalOpen(true)
+  }
+
+  const openViewModal = (record: any) => {
+    setSelectedRecord(record)
+    setIsViewModalOpen(true)
+  }
+
+  useEffect(() => {
+    if (organizationId) {
+      fetchRecords()
+    }
+  }, [organizationId])
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary"></div>
+        <p className="text-body-sm text-text-secondary">{t('common.loading')}</p>
+      </div>
+    </div>
+  )
+
+  if (!organizationId) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-text-secondary mx-auto mb-3" />
+          <h3 className="text-heading-md font-semibold text-text-primary mb-2">
+            {t('common.organizationRequired')}
+          </h3>
+          <p className="text-body text-text-secondary">
+            {t('common.organizationRequiredDescription')}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const getStatusStyle = (status: string) => {
+    switch(status) {
+      case 'active': return 'bg-status-success/20 text-status-success shadow-[0_0_10px_rgba(34,197,94,0.3)]'
+      case 'inactive': return 'bg-status-error/20 text-status-error'
+      case 'pending': return 'bg-status-warning/20 text-status-warning'
+      default: return 'bg-gray-500/20 text-gray-400'
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+      case 'active': return 'Aktiven'
+      case 'inactive': return 'Neaktiven'
+      case 'pending': return 'V čakanju'
+      default: return status
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+            <UserCog className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary">Vloge, odgovornosti in pooblastila</h1>
+            <p className="text-body-sm text-text-secondary">Upravljanje vlog in odgovornosti po ISO 27001:2022</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="h-10 px-4 bg-accent-primary hover:bg-accent-primary-hover text-white rounded-sm transition-colors duration-150 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span className="text-body-sm font-medium">Dodaj vlogo</span>
+        </button>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Išči po nazivu vloge, osebi ali namenu..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 bg-bg-surface border border-border-subtle rounded-sm text-body text-text-primary placeholder-text-secondary focus:border-accent-primary focus:outline-none"
+          />
+        </div>
+        <div className="sm:w-48">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full px-4 py-2 bg-bg-surface border border-border-subtle rounded-sm text-body text-text-primary focus:border-accent-primary focus:outline-none"
+          >
+            <option value="all">Vsi statusi</option>
+            <option value="active">Aktiven</option>
+            <option value="inactive">Neaktiven</option>
+            <option value="pending">V čakanju</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-bg-surface rounded-sm border border-border-subtle overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-bg-pure-black border-b border-border-subtle">
+            <tr>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Naziv vloge</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Dodeljeno</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Namembnost</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Status</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Datum imenovanja</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Veljavnost</th>
+              <th className="text-left px-6 py-4 text-caption text-text-secondary uppercase tracking-wide">Dejanja</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-subtle">
+            {filteredRecords.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-8 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <AlertCircle className="w-8 h-8 text-text-secondary" />
+                    <p className="text-body text-text-secondary">
+                      {searchTerm || statusFilter !== 'all' ? 'Nobena vloga ne ustreza iskalnim kriterijem' : 'Nobena vloga ni najdena'}
+                    </p>
+                    <p className="text-body-sm text-text-secondary">
+                      {organizationId ? 
+                        `Za organizacijo ${organizationId} ni najdenih vlog v tabeli iso_roles_responsibilities` : 
+                        'Organizacijski kontekst ni na voljo'
+                      }
+                    </p>
+                    {!searchTerm && statusFilter === 'all' && (
+                      <p className="text-body-sm text-text-secondary">Poizkusite dodati novo vlogo</p>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredRecords.map((record) => (
+              <tr key={record.id} className="hover:bg-bg-surface-hover transition-colors duration-150">
+                <td className="px-6 py-4 text-body text-text-primary font-medium">{record.role_name}</td>
+                <td className="px-6 py-4 text-body text-text-secondary">{record.person_assigned || '-'}</td>
+                <td className="px-6 py-4 text-body text-text-secondary max-w-xs truncate" title={record.role_purpose}>
+                  {record.role_purpose || '-'}
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`px-2 py-1 rounded-full text-caption font-medium ${getStatusStyle(record.status)}`}>
+                    {getStatusLabel(record.status)}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-body text-text-secondary">
+                  {record.appointment_date ? new Date(record.appointment_date).toLocaleDateString('sl-SI') : '-'}
+                </td>
+                <td className="px-6 py-4 text-body text-text-secondary">
+                  {record.validity_start && record.validity_end 
+                    ? `${new Date(record.validity_start).toLocaleDateString('sl-SI')} - ${new Date(record.validity_end).toLocaleDateString('sl-SI')}`
+                    : '-'
+                  }
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => openViewModal(record)}
+                      className="p-2 hover:bg-bg-near-black rounded transition-colors duration-150"
+                      title={t('common.view')}
+                    >
+                      <Eye className="w-4 h-4 text-text-secondary" />
+                    </button>
+                    <button 
+                      onClick={() => openEditModal(record)}
+                      className="p-2 hover:bg-bg-near-black rounded transition-colors duration-150"
+                      title={t('common.edit')}
+                    >
+                      <Edit className="w-4 h-4 text-text-secondary" />
+                    </button>
+                    <button 
+                      onClick={() => openDeleteModal(record)}
+                      className="p-2 hover:bg-bg-near-black rounded transition-colors duration-150"
+                      title={t('common.delete')}
+                    >
+                      <Trash2 className="w-4 h-4 text-status-error" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <ISORolesAndResponsibilitiesAddModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleModalSuccess}
+      />
+
+      <ModifyModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setSelectedRecord(null)
+        }}
+        onSave={handleModalSuccess}
+        mode="edit"
+        record={selectedRecord}
+        title="Uredi vlogo"
+        table="iso_roles_responsibilities"
+        fields={[
+          { key: 'role_name', label: 'Naziv vloge', type: 'text' as const, required: true },
+          { key: 'role_purpose', label: 'Namembnost vloge', type: 'textarea' as const, required: true },
+          { key: 'key_responsibilities', label: 'Ključne odgovornosti', type: 'textarea' as const, required: true },
+          { key: 'authorities', label: 'Pooblastila', type: 'textarea' as const, required: true },
+          { key: 'reporting_lines', label: 'Hierarhija poročanja', type: 'textarea' as const, required: true },
+          { key: 'required_competencies', label: 'Zahtevane kompetence', type: 'textarea' as const, required: true },
+          { key: 'required_training', label: 'Zahtevano usposabljanje', type: 'textarea' as const, required: true },
+          { key: 'completed_training', label: 'Opravljeno usposabljanje', type: 'textarea' as const },
+          { key: 'relevant_processes', label: 'Ustrezni procesi', type: 'textarea' as const, required: true },
+          { key: 'related_controls', label: 'Povezane kontrole', type: 'textarea' as const, required: true },
+          { key: 'related_risks', label: 'Povezana tveganja', type: 'textarea' as const },
+          { key: 'performance_indicators', label: 'Kazalniki uspešnosti', type: 'textarea' as const, required: true },
+          { key: 'kpi_targets', label: 'Cilji KPI', type: 'textarea' as const },
+          { key: 'person_assigned', label: 'Dodeljena oseba', type: 'text' as const, required: true },
+          { key: 'appointment_date', label: 'Datum imenovanja', type: 'date' as const, required: true },
+          { key: 'validity_start', label: 'Začetek veljavnosti', type: 'date' as const, required: true },
+          { key: 'validity_end', label: 'Konec veljavnosti', type: 'date' as const, required: true },
+          { key: 'document_version', label: 'Verzija dokumenta', type: 'text' as const },
+          { key: 'document_owner', label: 'Lastnik dokumenta', type: 'text' as const },
+          { key: 'communication_plan', label: 'Komunikacijski načrt', type: 'textarea' as const },
+          { key: 'stakeholder_notification', label: 'Obveščanje stakeholderjem', type: 'textarea' as const },
+          { key: 'status', label: 'Status', type: 'select' as const, required: true, options: ['active', 'inactive', 'pending'] },
+          { key: 'notes', label: 'Opombe', type: 'textarea' as const }
+        ]}
+        defaultValues={{ organization_id: organizationId }}
+      />
+
+      <ModifyModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false)
+          setSelectedRecord(null)
+        }}
+        onSave={handleModalSuccess}
+        mode="delete"
+        record={selectedRecord}
+        title="Izbriši vlogo"
+        table="iso_roles_responsibilities"
+        fields={[]}
+        defaultValues={{}}
+      />
+
+      <ModifyModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false)
+          setSelectedRecord(null)
+        }}
+        onSave={handleModalSuccess}
+        mode="view"
+        record={selectedRecord}
+        title="Podrobnosti vloge"
+        table="iso_roles_responsibilities"
+        fields={[
+          { key: 'role_name', label: 'Naziv vloge', type: 'text' as const },
+          { key: 'role_purpose', label: 'Namembnost vloge', type: 'textarea' as const },
+          { key: 'key_responsibilities', label: 'Ključne odgovornosti', type: 'textarea' as const },
+          { key: 'authorities', label: 'Pooblastila', type: 'textarea' as const },
+          { key: 'reporting_lines', label: 'Hierarhija poročanja', type: 'textarea' as const },
+          { key: 'required_competencies', label: 'Zahtevane kompetence', type: 'textarea' as const },
+          { key: 'required_training', label: 'Zahtevano usposabljanje', type: 'textarea' as const },
+          { key: 'completed_training', label: 'Opravljeno usposabljanje', type: 'textarea' as const },
+          { key: 'relevant_processes', label: 'Ustrezni procesi', type: 'textarea' as const },
+          { key: 'related_controls', label: 'Povezane kontrole', type: 'textarea' as const },
+          { key: 'related_risks', label: 'Povezana tveganja', type: 'textarea' as const },
+          { key: 'performance_indicators', label: 'Kazalniki uspešnosti', type: 'textarea' as const },
+          { key: 'kpi_targets', label: 'Cilji KPI', type: 'textarea' as const },
+          { key: 'person_assigned', label: 'Dodeljena oseba', type: 'text' as const },
+          { key: 'appointment_date', label: 'Datum imenovanja', type: 'date' as const },
+          { key: 'validity_start', label: 'Začetek veljavnosti', type: 'date' as const },
+          { key: 'validity_end', label: 'Konec veljavnosti', type: 'date' as const },
+          { key: 'document_version', label: 'Verzija dokumenta', type: 'text' as const },
+          { key: 'document_owner', label: 'Lastnik dokumenta', type: 'text' as const },
+          { key: 'communication_plan', label: 'Komunikacijski načrt', type: 'textarea' as const },
+          { key: 'stakeholder_notification', label: 'Obveščanje stakeholderjem', type: 'textarea' as const },
+          { key: 'status', label: 'Status', type: 'select' as const, options: ['active', 'inactive', 'pending'] },
+          { key: 'notes', label: 'Opombe', type: 'textarea' as const }
+        ]}
+        defaultValues={{ organization_id: organizationId }}
+      />
+    </div>
+  )
+}
